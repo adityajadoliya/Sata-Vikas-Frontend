@@ -102,7 +102,11 @@ export default function UploadModal({ onClose, onSubmitted }) {
       onSubmitted?.();
     } catch (err) {
       console.error('Submit failed:', err);
-      setErrorMessage(err.message || 'Failed to submit the form. Please try again.');
+      let msg = err.message || 'Failed to submit the form. Please try again.';
+      if (msg.includes('UNIQUE constraint failed') || msg.includes('form_unique_id')) {
+        msg = 'This form has already been uploaded with the same Form No. Please check your Form No. before uploading.';
+      }
+      setErrorMessage(msg);
     } finally {
       setSubmitting(false);
     }

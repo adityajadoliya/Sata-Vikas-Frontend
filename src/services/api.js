@@ -95,12 +95,12 @@ export function normalizeBackendFormA(raw) {
   const part1Prod = { ...emptyHours(), ...(raw.part1Production || {}) };
   const part1Cast = { ...emptyHours(), ...(raw.part1CastingRej || {}) };
   const part1Mach = { ...emptyHours(), ...(raw.part1MachiningRej || {}) };
-  const part1Unp  = { ...emptyHours(), ...(raw.part1UnprocessedRej || {}) };
+  const part1Unp = { ...emptyHours(), ...(raw.part1UnprocessedRej || {}) };
 
   const part2Prod = { ...emptyHours(), ...(raw.part2Production || {}) };
   const part2Cast = { ...emptyHours(), ...(raw.part2CastingRej || {}) };
   const part2Mach = { ...emptyHours(), ...(raw.part2MachiningRej || {}) };
-  const part2Unp  = { ...emptyHours(), ...(raw.part2UnprocessedRej || {}) };
+  const part2Unp = { ...emptyHours(), ...(raw.part2UnprocessedRej || {}) };
 
   let partNo1 = raw.partNo1 || raw.part_number || raw.pdi_ok_part1 || '';
   let partNo2 = raw.partNo2 || raw.part_number_2 || raw.pdi_ok_part2 || '';
@@ -112,27 +112,42 @@ export function normalizeBackendFormA(raw) {
     hr8: '', hr9: '', hr10: '', hr11: '', hr12: '', hr13: ''
   };
 
+  const part2UphValues = {
+    hr1: '', hr2: '', hr3: '', hr4: '', hr5: '', hr6: '', hr7: '',
+    hr8: '', hr9: '', hr10: '', hr11: '', hr12: '', hr13: ''
+  };
+
   // Process production_grid if present in backend format
   if (Array.isArray(raw.production_grid)) {
+    // Collect distinct part numbers in grid order
+    const distinctParts = [];
+    raw.production_grid.forEach(entry => {
+      const p = String(entry.part_number || '').trim();
+      if (p && p !== 'Form A' && p !== 'Page A' && !distinctParts.includes(p)) {
+        distinctParts.push(p);
+      }
+    });
+
+    const p1Ident = distinctParts[0] || partNo1;
+    const p2Ident = distinctParts[1] || partNo2;
+
+    if (!partNo1 && p1Ident) partNo1 = p1Ident;
+    if (!partNo2 && p2Ident) partNo2 = p2Ident;
+
     raw.production_grid.forEach(entry => {
       const slotNum = String(entry.hour_slot || '').replace(/[^0-9]/g, '');
       if (!slotNum) return;
       const hrKey = `hr${slotNum}`;
 
-      if (!partNo1 && entry.part_number && entry.part_number !== 'Form A' && entry.part_number !== 'Page A') {
-        partNo1 = entry.part_number;
-      }
+      const entryPart = String(entry.part_number || '').trim();
+      const isPart2 = (p2Ident && entryPart === p2Ident) ||
+                      (distinctParts.length >= 2 && entryPart !== p1Ident && entryPart !== '');
 
-      // Map per-hour UPH value (each hour can have its own UPH on the physical form).
-      // FIX: Preserve zero values — a 0 UPH is meaningful (machine stopped) and must not be dropped.
-      if (entry.uph !== undefined && entry.uph !== null) {
-        uphValues[hrKey] = String(entry.uph);
-        // Keep a single reference UPH (first non-zero value found)
-        if (!uph && entry.uph !== 0) uph = String(entry.uph);
-      }
-
-      // Check if entry belongs to part 1 or part 2
-      if (!partNo2 || entry.part_number === partNo1) {
+      if (!isPart2) {
+        if (entry.uph !== undefined && entry.uph !== null) {
+          uphValues[hrKey] = String(entry.uph);
+          if (!uph && entry.uph !== 0) uph = String(entry.uph);
+        }
         if (entry.actual_production !== undefined && entry.actual_production !== null) {
           part1Prod[hrKey] = String(entry.actual_production);
         }
@@ -146,7 +161,9 @@ export function normalizeBackendFormA(raw) {
           part1Unp[hrKey] = String(entry.unprocessed_rejection);
         }
       } else {
-        partNo2 = entry.part_number;
+        if (entry.uph !== undefined && entry.uph !== null) {
+          part2UphValues[hrKey] = String(entry.uph);
+        }
         if (entry.actual_production !== undefined && entry.actual_production !== null) {
           part2Prod[hrKey] = String(entry.actual_production);
         }
@@ -163,6 +180,22 @@ export function normalizeBackendFormA(raw) {
     });
   }
 
+  // Populate from pre-existing raw.uphValues or raw.part2UphValues if present
+  if (raw.uphValues && typeof raw.uphValues === 'object') {
+    Object.keys(uphValues).forEach(k => {
+      if (raw.uphValues[k] !== undefined && raw.uphValues[k] !== '') {
+        uphValues[k] = String(raw.uphValues[k]);
+      }
+    });
+  }
+  if (raw.part2UphValues && typeof raw.part2UphValues === 'object') {
+    Object.keys(part2UphValues).forEach(k => {
+      if (raw.part2UphValues[k] !== undefined && raw.part2UphValues[k] !== '') {
+        part2UphValues[k] = String(raw.part2UphValues[k]);
+      }
+    });
+  }
+
   // Calculate totals for production rows
   const sumHours = (hoursObj) => {
     let sum = 0;
@@ -173,21 +206,19 @@ export function normalizeBackendFormA(raw) {
     return sum > 0 ? String(sum) : '';
   };
 
-  // The paper's Part No. 1 Plan Total is the sum of the hourly UPH/plan cells.
-  // It is not represented by a separate API field, so preserve an OCR-provided
-  // total when available and otherwise calculate it for the Total column.
   uphValues.total = raw.uphValues?.total || raw.plan1Total || sumHours(uphValues);
+  part2UphValues.total = raw.part2UphValues?.total || raw.plan2Total || sumHours(part2UphValues);
 
   // FIX: Only compute a sum when OCR / stored data did not already provide a total.
   // This prevents overriding a value the operator physically wrote in the Total column.
   part1Prod.total = part1Prod.total || sumHours(part1Prod);
   part1Cast.total = part1Cast.total || sumHours(part1Cast);
   part1Mach.total = part1Mach.total || sumHours(part1Mach);
-  part1Unp.total  = part1Unp.total  || sumHours(part1Unp);
+  part1Unp.total = part1Unp.total || sumHours(part1Unp);
   part2Prod.total = part2Prod.total || sumHours(part2Prod);
   part2Cast.total = part2Cast.total || sumHours(part2Cast);
   part2Mach.total = part2Mach.total || sumHours(part2Mach);
-  part2Unp.total  = part2Unp.total  || sumHours(part2Unp);
+  part2Unp.total = part2Unp.total || sumHours(part2Unp);
 
   // Helper for matching TPM loss categories accurately even with OCR typos (e.g. "Machice cleaning")
   const matchTpmLoss = (reason, cat, code) => {
@@ -256,11 +287,7 @@ export function normalizeBackendFormA(raw) {
 
   if (Array.isArray(lossEntriesList) && lossEntriesList.length > 0) {
     lossEntriesList.forEach(loss => {
-      const isMachineCleaning = /machi?ne|machice/i.test(String(loss.loss_reason || loss.description || loss.reason || ''))
-        && /clean/i.test(String(loss.loss_reason || loss.description || loss.reason || ''));
-      const reportedSlot = String(loss.hour_slot || '').replace(/[^0-9]/g, '');
-      // Keep already-saved extractions aligned with the corrected Machine Cleaning H4 cell.
-      const slotNum = isMachineCleaning && reportedSlot === '5' ? '4' : reportedSlot;
+      const slotNum = String(loss.hour_slot || '').replace(/[^0-9]/g, '');
       if (!slotNum) return;
       const hrKey = `hr${slotNum}`;
       const duration = String(loss.duration_minutes !== undefined && loss.duration_minutes !== null ? loss.duration_minutes : (loss.duration || ''));
@@ -286,10 +313,21 @@ export function normalizeBackendFormA(raw) {
     }
   });
 
+  const numericId = parseInt(raw.id, 10);
+  const defaultSerial = !isNaN(numericId)
+    ? (numericId >= 1000 ? String(numericId).padStart(6, '0') : String(7823 + numericId).padStart(6, '0'))
+    : '007824';
+  const uniqueId = raw.form_unique_id || raw.formUniqueId || raw.form_a_unique_number || raw.serialNo || raw.serial_no || raw.serialNumber;
+  const serialNo = uniqueId || (raw.id ? defaultSerial : '007824');
+
   return {
     id: raw.id || null,
+    form_unique_id: uniqueId || serialNo,
+    form_a_unique_number: uniqueId || serialNo,
+    serialNo,
     date: raw.logDate || raw.log_date || raw.date || '',
     shift: raw.shift || '',
+    zone: raw.zone || '',
     machineNo: raw.machineNo || raw.machine_no || '',
     qaCell: raw.qaCell || raw.qa_cell || '',
     operationNumber: raw.operationNumber || raw.operation_number || raw.opearationNumber || '',
@@ -302,6 +340,7 @@ export function normalizeBackendFormA(raw) {
     scheduledQuantity: raw.scheduledQuantity || raw.scheduled_quantity || '',
     page: raw.page || (raw.opearationNumber === 'Page-B' ? 'B' : 'A'),
     uphValues,
+    part2UphValues,
     uph,
     part1Production: part1Prod,
     part1CastingRej: part1Cast,
@@ -348,7 +387,7 @@ export function formatFormAToBackend(formData) {
     const mach1 = parseInt(formData.part1MachiningRej?.[hrKey]) || 0;
     const unp1 = parseInt(formData.part1UnprocessedRej?.[hrKey]) || 0;
 
-    if (prod1 || cast1 || mach1 || unp1 || i === 1) {
+    if (prod1 || cast1 || mach1 || unp1 || hourUph) {
       productionGrid.push({
         part_number: part1,
         hour_slot: slot,
@@ -361,16 +400,17 @@ export function formatFormAToBackend(formData) {
     }
 
     if (part2) {
+      const hourUph2 = parseInt(formData.part2UphValues?.[hrKey]) || 0;
       const prod2 = parseInt(formData.part2Production?.[hrKey]) || 0;
       const cast2 = parseInt(formData.part2CastingRej?.[hrKey]) || 0;
       const mach2 = parseInt(formData.part2MachiningRej?.[hrKey]) || 0;
       const unp2 = parseInt(formData.part2UnprocessedRej?.[hrKey]) || 0;
 
-      if (prod2 || cast2 || mach2 || unp2) {
+      if (prod2 || cast2 || mach2 || unp2 || hourUph2) {
         productionGrid.push({
           part_number: part2,
           hour_slot: slot,
-          uph: hourUph,
+          uph: hourUph2,
           actual_production: prod2,
           casting_rejection: cast2,
           machining_rejection: mach2,
@@ -398,7 +438,11 @@ export function formatFormAToBackend(formData) {
     });
   }
 
+  const uniqueId = formData.serialNo || formData.form_unique_id || formData.form_a_unique_number || formData.serialNumber || (formData.id ? (parseInt(formData.id, 10) < 1000 ? String(7823 + parseInt(formData.id, 10)).padStart(6, '0') : String(formData.id).padStart(6, '0')) : null);
+
   return {
+    form_unique_id: uniqueId,
+    form_a_unique_number: uniqueId,
     log_date: formData.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }),
     shift: formData.shift || 'A',
     qa_cell: formData.qaCell || formData.qa_cell || '',
@@ -477,6 +521,7 @@ export async function createUser(userData) {
         username: data.username || payload.username,
         fullName: data.full_name || payload.full_name,
         email: data.email || payload.email,
+        password: payload.password,
         role: data.role || payload.role,
         designation: data.designation || payload.designation,
         department: data.department || payload.department,
@@ -531,7 +576,7 @@ export async function extractFormDataFromImage(file) {
       formData.append('file', file);
       const res = await apiClient.post('/production/extractimage', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 60000,
+        timeout: 120000,
       });
       // The API wraps OCR output in `data`; normalize that payload, not the wrapper.
       // Keep the durable server path so the original paper form is linked on save.
@@ -542,7 +587,8 @@ export async function extractFormDataFromImage(file) {
       const extracted = normalizeBackendFormA({
         ...extractionPayload,
         ...(extractionPayload?.header || {}),
-        partNo1: extractionPayload?.header?.part || extractionPayload?.header?.partNo1 || extractionPayload?.partNo1 || '',
+        part: extractionPayload?.header?.part || extractionPayload?.part || '',
+        partNo1: extractionPayload?.header?.partNo1 || extractionPayload?.header?.part || extractionPayload?.partNo1 || '',
         partNo2: extractionPayload?.header?.partNo2 || extractionPayload?.partNo2 || '',
         plan1: extractionPayload?.header?.plan1 || extractionPayload?.header?.plan || extractionPayload?.plan1 || '',
         plan2: extractionPayload?.header?.plan2 || extractionPayload?.plan2 || '',
@@ -650,8 +696,12 @@ export async function saveFormA(formData) {
       return savedRecord;
     } catch (err) {
       console.warn('Backend API /form-a-save submit failed:', err);
-      if (err.response?.data?.detail) {
-        throw new Error(typeof err.response.data.detail === 'string' ? err.response.data.detail : 'Save failed');
+      let detail = err.response?.data?.detail;
+      if (typeof detail === 'string') {
+        if (detail.includes('UNIQUE constraint failed') || detail.includes('form_unique_id')) {
+          detail = 'This form has already been uploaded with the same Form No. Please check your Form No. before uploading.';
+        }
+        throw new Error(detail);
       }
       throw new Error('Unable to save the form to the server. Please check your connection and try again.');
     }
@@ -690,8 +740,8 @@ export async function getFilteredFormAList(filters = {}) {
       if (filters.offset !== undefined) params.offset = filters.offset;
 
       const res = await apiClient.get('/form-a/list', { params });
-      const rawList = Array.isArray(res.data) 
-        ? res.data 
+      const rawList = Array.isArray(res.data)
+        ? res.data
         : (res.data?.data || res.data?.items || res.data?.records || []);
       let logs = rawList.map(item => normalizeBackendFormA(item));
 
@@ -751,7 +801,7 @@ export const getProductionLogs = getFilteredFormAList;
 // ─── 6. GET SINGLE FORM A FULL DETAILS BY ID ─────────────────
 export async function getFormAById(id) {
   if (!USE_MOCK_FALLBACK) {
-    try { 
+    try {
       const res = await apiClient.get(`form-a/${id}`);
       return normalizeBackendFormA(res.data);
     } catch (err) {
@@ -1122,9 +1172,13 @@ export async function getUsers() {
 }
 
 export async function updateUser(id, userData) {
+  const payload = {
+    ...userData,
+    full_name: userData.fullName || userData.full_name,
+  };
   if (!USE_MOCK_FALLBACK) {
     try {
-      const res = await apiClient.put(`/users/${id}`, userData);
+      const res = await apiClient.put(`/users/${id}`, payload);
       return res.data;
     } catch (err) {
       if (err.response?.data?.detail) {

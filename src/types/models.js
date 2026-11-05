@@ -1,8 +1,11 @@
 /**
  * @typedef {Object} ProductionLog
  * @property {number} id
+ * @property {string} form_unique_id
+ * @property {string} serialNo
  * @property {string} date - YYYY-MM-DD
  * @property {string} shift - 'A' | 'B' | 'C'
+ * @property {string} [zone]
  * @property {string} machineNo
  * @property {string} qaCell
  * @property {string} operationNumber
@@ -137,8 +140,11 @@ export function createEmptyFormData() {
 
   return {
     id: null,
+    form_unique_id: '',
+    serialNo: '',
     date: '',
     shift: '',
+    zone: '',
     machineNo: '',
     machineNoByOperation: {},
     employeeNoByOperation: {},

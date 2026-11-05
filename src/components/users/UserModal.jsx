@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Eye, EyeOff } from 'lucide-react';
 
 const DEPARTMENTS = [
   'QA Cell - A',
@@ -21,6 +21,7 @@ export default function UserModal({ user, onClose, onSave }) {
     status: 'active',
   });
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -29,13 +30,26 @@ export default function UserModal({ user, onClose, onSave }) {
         fullName: user.fullName || user.full_name || '',
         username: user.username || '',
         email: user.email || '',
-        password: '',
+        password: user.password || '',
         role: user.role || 'employee',
         designation: user.designation || '',
         department: user.department || '',
         status: (user.status || 'active').toLowerCase(),
       });
+    } else {
+      setForm({
+        employeeId: '',
+        fullName: '',
+        username: '',
+        email: '',
+        password: '',
+        role: 'employee',
+        designation: '',
+        department: 'QA Cell - A',
+        status: 'active',
+      });
     }
+    setShowPassword(false);
   }, [user]);
 
   const handleSubmit = async (e) => {
@@ -116,15 +130,26 @@ export default function UserModal({ user, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="label text-xs font-semibold uppercase tracking-wider">{isEdit ? 'New Password (leave blank to keep)' : 'Password'}</label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="input text-xs"
-              placeholder={isEdit ? '••••••••' : 'Set password'}
-              required={!isEdit}
-            />
+            <label className="label text-xs font-semibold uppercase tracking-wider">Password</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="input pr-10 text-xs"
+                placeholder={isEdit ? 'Enter password' : 'Set password'}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer transition-colors p-1"
+                aria-label={showPassword ? 'Hide password' : 'View password'}
+                title={showPassword ? 'Hide password' : 'View password'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <div>

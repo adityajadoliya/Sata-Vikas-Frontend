@@ -57,7 +57,8 @@ export default function ProductionGrid({ data = {}, editable = false, onChange }
   };
 
   const hasPart2Data = data.partNo2 || data.plan2 ||
-    Object.values(part2Prod).some(v => v && v !== '');
+    Object.values(part2Prod).some(v => v && v !== '') ||
+    Object.values(data.part2UphValues || {}).some(v => v && v !== '');
 
   return (
     <>

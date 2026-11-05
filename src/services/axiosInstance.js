@@ -15,7 +15,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 60000, // 60s timeout to allow AI Vision OCR processing
+  timeout: 120000, // 60s timeout to allow AI Vision OCR processing
 });
 
 apiClient.interceptors.request.use(

@@ -1,5 +1,23 @@
 import { OP_SLOTS, HOUR_LABELS } from '../../types/models';
 
+export const getFormASerialNumber = (data) => {
+  if (data?.serialNo) return String(data.serialNo);
+  if (data?.serialNumber) return String(data.serialNumber);
+  if (data?.serial_no) return String(data.serial_no);
+
+  if (data?.id !== undefined && data?.id !== null && data?.id !== '') {
+    const numericId = parseInt(data.id, 10);
+    if (!isNaN(numericId)) {
+      if (numericId >= 1000) {
+        return String(numericId).padStart(6, '0');
+      }
+      return String(7823 + numericId).padStart(6, '0');
+    }
+    return String(data.id).padStart(6, '0');
+  }
+  return '007824';
+};
+
 export default function FormHeader({ data, editable, onChange }) {
   const update = (field, value) => {
     if (onChange) onChange({ ...data, [field]: value });
@@ -48,7 +66,7 @@ export default function FormHeader({ data, editable, onChange }) {
     });
   };
 
-  const Cell = ({ value, field, width, placeholder }) => (
+  const Cell = ({ value, field, width, placeholder, fallback = '—' }) => (
     editable && field === 'shift' ? (
       <select
         value={value || ''}
@@ -71,42 +89,42 @@ export default function FormHeader({ data, editable, onChange }) {
         style={{ width: width || '100%' }}
       />
     ) : (
-      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{value || '—'}</span>
+      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{value || fallback}</span>
     )
   );     
   
   return (
     <>
-      {/* Row 1: Company + Title + Date & Shift */}
+      {/* Row 1: Serial No + SATA VIKAS- Hourly Production Monitoring Book + Date */}
       <tr>
-        <td className="form-cell-header text-left px-2" colSpan={3}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <img src="/sata-vikas-logo.svg" alt="Logo" className="h-4 w-auto" />
-            <div className="text-[9px] leading-tight font-semibold">
-              <span className="text-slate-500 dark:text-slate-400">Page</span>{' '}
-              <Cell value={data.page || 'A'} field="page" width="22px" />
-            </div>
-          </div>
-          <div className="font-bold text-[10px] text-slate-800 dark:text-slate-200">SATA VIKAS INDIA P LTD, PALWAL</div>
+        <td className="form-cell-header text-center px-3 py-2 bg-slate-50 dark:bg-slate-800/80" colSpan={3}>
+          {editable ? (
+            <input
+              type="text"
+              value={data.serialNo !== undefined ? data.serialNo : getFormASerialNumber(data)}
+              onChange={(e) => update('serialNo', e.target.value)}
+              placeholder="000000"
+              className="form-cell-input text-center font-mono font-bold text-sm sm:text-base text-red-600 dark:text-red-400 tracking-[0.2em]"
+              style={{ width: '100%' }}
+            />
+          ) : (
+            <span className="font-mono font-extrabold text-sm sm:text-base tracking-[0.22em] text-red-600 dark:text-red-400 select-all">
+              {getFormASerialNumber(data)}
+            </span>
+          )}
         </td>
-        <td className="form-cell-header text-center font-bold text-sm sm:text-base text-indigo-800 dark:text-indigo-300" colSpan={11}>
-          Hourly Production Monitoring Book
+        <td className="form-cell-header text-center font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 tracking-wide px-3 py-2" colSpan={11}>
+          SATA VIKAS- Hourly Production Monitoring Book
         </td>
-        <td className="form-cell-header px-2" colSpan={3}>
-          <div className="flex flex-col gap-1 text-[10px]"> 
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-slate-500 dark:text-slate-400 font-semibold">Date:</span>
-              <Cell value={data.date} field="date" />
-            </div>
-            <div className="flex items-center justify-between gap-1">
-              <span className="text-slate-500 dark:text-slate-400 font-semibold">Shift:</span> 
-              <Cell value={data.shift} field="shift" width="55px" />
-            </div>
-          </div>
+        <td className="form-cell-header text-center font-bold text-slate-700 dark:text-slate-300 px-1 py-1 text-[10px] sm:text-xs whitespace-nowrap" colSpan={1}>
+          Date:
+        </td>
+        <td className="form-cell-header px-1.5 py-1 text-center" colSpan={2}>
+          <Cell value={data.date} field="date" />
         </td>
       </tr>
 
-      {/* Row 2: Operation Number slots + QA Cell */}
+      {/* Row 2: Operation Number slots + PDI Shift */}
       <tr>
         <td className="form-label-cell" colSpan={3}>
           <div className="flex items-center gap-1">
@@ -119,20 +137,27 @@ export default function FormHeader({ data, editable, onChange }) {
             <div className="text-[9px] font-bold text-slate-600 dark:text-slate-300 leading-none">{slot}</div>
           </td>
         ))}
-        <td className="form-cell px-2" colSpan={4}>
-          <div className="flex items-center gap-1 text-[10px]">
-            <span className="font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">QA Cell :</span>
-            <div className="flex-1">
-              <Cell value={data.qaCell} field="qaCell" placeholder="e.g. QA-Cell" />
-            </div>
-          </div>
+        <td className="form-cell text-center font-bold text-slate-700 dark:text-slate-300 text-[10px] bg-slate-50 dark:bg-slate-800/60 p-0.5">
+          PDI
+        </td>
+        <td className="form-cell text-center font-bold text-slate-600 dark:text-slate-400 text-[10px] p-0.5 whitespace-nowrap">
+          Shift :
+        </td>
+        <td className="form-cell px-1 text-center" colSpan={2}>
+          <Cell value={data.shift} field="shift" width="55px" />
         </td>
       </tr>
 
-      {/* Row 3: Machine No with 10 - 100 hour columns */}
+      {/* Row 3: Zone + Machine No with 10 - 100 hour columns + QA Cell */}
       <tr>
-        <td className="form-label-cell" colSpan={3}>
-          <span className="text-slate-600 dark:text-slate-400 font-semibold">Machine No :</span>
+        <td className="form-label-cell px-2" colSpan={3}>
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-slate-600 dark:text-slate-400 font-semibold whitespace-nowrap">Zone :</span>
+              <Cell value={data.zone} field="zone" width="55px" placeholder="Zone" fallback="" />
+            </div>
+            <span className="text-slate-600 dark:text-slate-400 font-semibold whitespace-nowrap">Machine No :</span>
+          </div>
         </td>
         {OP_SLOTS.map(slot => (
           <td key={slot} className="form-cell text-center p-0.5">
@@ -151,17 +176,18 @@ export default function FormHeader({ data, editable, onChange }) {
             )}
           </td>
         ))}
-        <td className="form-cell px-2" colSpan={4}>
-          <div className="flex items-center gap-1 text-[10px]">
-            <span className="font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">Part :</span>
-            <div className="flex-1">
-              <Cell value={data.partNo1} field="partNo1" placeholder="Part Number" />
-            </div>
-          </div>
+        <td className="form-cell text-center font-bold text-slate-700 dark:text-slate-300 text-[10px] bg-slate-50 dark:bg-slate-800/60 p-0.5">
+          QA
+        </td>
+        <td className="form-cell text-center font-bold text-slate-600 dark:text-slate-400 text-[10px] p-0.5 whitespace-nowrap">
+          Cell :
+        </td>
+        <td className="form-cell px-1 text-center" colSpan={2}>
+          <Cell value={data.qaCell} field="qaCell" placeholder="e.g. QA-Cell" />
         </td>
       </tr> 
 
-      {/* Row 4: Employee Number with 10 - 100 hour columns */}
+      {/* Row 4: Employee Number with 10 - 100 hour columns + Part */}
       <tr>
         <td className="form-label-cell" colSpan={3}>
           <span className="text-slate-600 dark:text-slate-400 font-semibold">Employee number :</span>
@@ -183,7 +209,13 @@ export default function FormHeader({ data, editable, onChange }) {
             )}
           </td>
         ))}
-        <td className="form-cell px-2 bg-slate-50/50 dark:bg-slate-800/30" colSpan={4} />
+        <td className="form-cell bg-slate-50/50 dark:bg-slate-800/30 p-0.5" />
+        <td className="form-cell text-center font-bold text-slate-600 dark:text-slate-400 text-[10px] p-0.5 whitespace-nowrap">
+          Part :
+        </td>
+        <td className="form-cell px-1 text-center" colSpan={2}>
+          <Cell value={data.partNo1} field="partNo1" placeholder="Part Number" />
+        </td>
       </tr>
 
       {/* Row 5: Scheduled Quantity + Hour Header (UPH, H1 - H13, Total) */}

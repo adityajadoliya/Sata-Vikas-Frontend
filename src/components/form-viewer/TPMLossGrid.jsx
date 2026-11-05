@@ -136,8 +136,20 @@ export default function TPMLossGrid({ data = {}, editable = false, onChange }) {
                 </td>
               ))}
 
-              {/* Total column placeholder for individual loss row */}
-              <td className="form-cell border border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40"></td>
+              {/* Total column for individual loss row */}
+              <td className="form-cell border border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 text-center font-bold text-xs">
+                {(() => {
+                  const rowTotal = HR_KEYS.reduce((sum, hr) => {
+                    const val = parseInt(loss.hourlyValues?.[hr]);
+                    return !isNaN(val) ? sum + val : sum;
+                  }, 0);
+                  return rowTotal > 0 ? (
+                    <span className="text-red-600 dark:text-red-400 font-bold text-xs">
+                      {rowTotal}
+                    </span>
+                  ) : '';
+                })()}
+              </td>
             </tr>
           );
         });
